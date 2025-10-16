@@ -1,0 +1,155 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// ================== ENUMS ==================
+
+enum Role {
+  EMPLOYER
+  EMPLOYEE
+}
+
+enum ContractType {
+  CONTRACT
+  PERMANENT
+  PART_TIME
+}
+
+enum ApplicationStatus {
+  PENDING
+  REVIEWED
+  REJECTED
+  ACCEPTED
+}
+
+enum JobStatus {
+  OPEN
+  CLOSED
+  FILLED
+}
+
+enum HeadhuntStatus {
+  PENDING
+  IN_PROGRESS
+  FULFILLED
+  CANCELLED
+}
+
+enum Urgency {
+  LOW
+  MEDIUM
+  HIGH
+  ASAP
+}
+
+// ================== MODELS ==================
+
+model User {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  email        String   @unique
+  name         String?
+  phoneNumber  String  @unique
+  passwordHash String
+  role         Role
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  jobs             Job[]             @relation("EmployerJobs")
+  applications     Application[]
+  headhuntRequests HeadhuntRequest[] // ←←← ADDED: reverse relation
+}
+
+model Job {
+  id           String       @id @default(auto()) @map("_id") @db.ObjectId
+  title        String
+  description  String
+  salary       Float?
+  duration     String?
+  contractType ContractType?
+  requirements Json
+  meta         Json?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  status       JobStatus    @default(OPEN)
+
+  employerId       String            @db.ObjectId
+  employer         User              @relation("EmployerJobs", fields: [employerId], references: [id])
+  applications     Application[]
+  headhuntRequests HeadhuntRequest[] // ←←← ADDED: reverse relation
+  isHeadhunted Boolean @default(false) 
+
+  @@index([status])
+}
+
+model Application {
+  id          String            @id @default(auto()) @map("_id") @db.ObjectId
+  jobId       String            @db.ObjectId
+  job         Job               @relation(fields: [jobId], references: [id])
+  applicantId String            @db.ObjectId
+  applicant   User              @relation(fields: [applicantId], references: [id])
+  resumeUrl   String?
+  coverLetter String?
+  extras      Json?
+  status      ApplicationStatus @default(PENDING)
+  appliedAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  isHeadhunted Boolean @default(false)
+
+  fulfilledHeadhuntRequest HeadhuntRequest[] @relation("HeadhuntFulfillment")// ←←← ADDED
+
+  @@unique([jobId, applicantId])
+  @@index([status])
+  @@index([isHeadhunted])
+}
+
+model HeadhuntRequest {
+  id         String @id @default(auto()) @map("_id") @db.ObjectId
+  jobId      String @db.ObjectId
+  job        Job    @relation(fields: [jobId], references: [id])
+  employerId String @db.ObjectId
+  employer   User   @relation(fields: [employerId], references: [id])
+
+  // form fields
+  companyName      String
+  contactEmail     String
+  contactPhone     String?
+  otherContacts    Json?        
+  urgency          Urgency      @default(MEDIUM)
+  preferredContactMethod String?
+
+  status      HeadhuntStatus @default(PENDING)
+  assignedTo  String?        
+  notes       String?
+  requestedAt DateTime       @default(now())
+  fulfilledAt DateTime?
+
+  // Added this
+  candidateName   String?   // external candidate name (optional)
+
+  fulfilledApplicationId String?       @db.ObjectId
+  fulfilledApplication   Application? @relation("HeadhuntFulfillment", fields: [fulfilledApplicationId], references: [id])
+
+  // operational fields
+  notified        Boolean  @default(false)
+  callRequestedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([jobId])
+  @@index([employerId])
+  @@index([status])
+  @@index([urgency])
+}
