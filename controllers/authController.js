@@ -124,3 +124,31 @@ exports.logout = (req, res) => {
   res.status(200).json({ message: 'Logged out successfully' });
 };
 
+// ====== DELETE USER PROFILE ======
+exports.deleteProfile = async (req, res, next) => {
+  try {
+    // Ensure the user is authenticated
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized: no user found in request' });
+    }
+
+    // Check if user exists
+    const existingUser = await prisma.user.findUnique({ where: { id: userId } });
+    if (!existingUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Delete user
+    await prisma.user.delete({ where: { id: userId } });
+
+    // Optionally, you can also cascade delete related data (bookings, messages, etc.)
+    // depending on your Prisma schema’s `onDelete` rules.
+
+    res.status(200).json({ message: 'User profile deleted successfully' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+
